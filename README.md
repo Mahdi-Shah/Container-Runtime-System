@@ -70,18 +70,10 @@ This project is a practical demonstration of the following Linux kernel features
 
 1.  **Clone the repository:**
     ```sh
-    git clone <your-repository-url>
-    cd <your-repository-name>
+    git clone https://github.com/Mahdi-Shah/Container-Runtime-System.git
     ```
 
-2.  **Install Python dependencies:**
-    ```sh
-    pip install -r requirements.txt 
-    # Or manually:
-    pip install click
-    ```
-
-3.  **Compile the C executables:**
+2.  **Compile the C executables:**
     The Python script expects the compiled binaries to be in the same directory.
     ```sh
     gcc -o container_executor container_executor.c
