@@ -14,8 +14,7 @@ from pathlib import Path
 CONTAINER_BASE_DIR = Path("/var/lib/my-container-manager")
 # Path to the C executor engine
 EXECUTOR_PATH = Path(__file__).parent.resolve() / "container_executor"
-NS_ENTER_PATH = Path(__file__).parent.resolve() / "ns_enter" # مسیر ابزار جدید برای exec
-# Path to Cgroup hierarchy
+NS_ENTER_PATH = Path(__file__).parent.resolve() / "ns_enter"
 CGROUP_BASE = Path("/sys/fs/cgroup/my-container-manager")
 # Base for temporary overlayfs directories
 TEMP_BASE = Path("/tmp")
@@ -61,7 +60,6 @@ def update_container_status(container_dir, new_status, new_pid=None):
 @click.group()
 def cli():
     """A simple tool to manage containers, written in Python and C."""
-    # This might need sudo if the parent dir is owned by root
     if not CONTAINER_BASE_DIR.exists():
         try:
             CONTAINER_BASE_DIR.mkdir(parents=True, exist_ok=True)
@@ -70,13 +68,12 @@ def cli():
             sys.exit(1)
     pass
 
-# --- CLI Commands ---
-
 @cli.command()
 @click.option("--memory", default="none", help="Memory limit (e.g., 100M).")
 @click.option("--cpu", default=None, type=float, help="CPU quota (e.g., 0.5 for 50%).")
+@click.option("--cpu-set", default="none", help="Set of CPUs to bind to (e.g., '0' or '0,1').")
 @click.argument("rootfs_path", type=click.Path(exists=True, file_okay=False, resolve_path=True))
-def run(memory, cpu, rootfs_path):
+def run(memory, cpu, cpu_set, rootfs_path):
     """Runs a new container."""
     
     container_id = str(uuid.uuid4())[:12]
@@ -95,6 +92,7 @@ def run(memory, cpu, rootfs_path):
         "rootfs": rootfs_path,
         "memory_limit": memory,
         "cpu_quota": cpu_quota,
+        "cpu_set": cpu_set,
         "status": "creating",
         "pid": None
     }
@@ -105,7 +103,7 @@ def run(memory, cpu, rootfs_path):
         
     executor_args = [
         "sudo", str(EXECUTOR_PATH), hostname, 
-        rootfs_path, memory, cpu_quota
+        rootfs_path, memory, cpu_quota, cpu_set
     ]
 
     click.echo(f"==> MANAGER: Invoking C executor...")
@@ -147,7 +145,7 @@ def run(memory, cpu, rootfs_path):
         click.echo("--- C Executor stderr ---", err=True)
         click.echo(e.stderr if e.stderr else "<empty>", err=True)
     finally:
-        update_container_status(container_dir, config["status"])
+        update_container_status(container_dir, config["status"], config.get("pid"))
         with open(config_path, "w") as f:
             json.dump(config, f, indent=4)
         click.echo(f"==> MANAGER: Final container status: '{config['status']}'.")
@@ -177,7 +175,8 @@ def start(container_id):
         "sudo", str(EXECUTOR_PATH), config['hostname'], 
         config['rootfs'], 
         config.get('memory_limit', 'none'), 
-        config.get('cpu_quota', 'none')
+        config.get('cpu_quota', 'none'),
+        config.get('cpu_set', 'none')
     ]
 
     process, new_child_pid = None, None
@@ -206,7 +205,6 @@ def start(container_id):
     except Exception as e:
         update_container_status(container_dir, 'failed')
         click.echo(f"\nCRITICAL ERROR: An unexpected error occurred: {e}", err=True)
-        traceback.print_exc(file=sys.stderr)
     finally:
         click.echo(f"==> MANAGER: Container '{config['id']}' start sequence complete.")
 

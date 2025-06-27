@@ -21,6 +21,7 @@ typedef struct {
     char* rootfs_path;
     char* memory_limit;
     char* cpu_quota_str;
+    char* cpu_set;
     char** cmd_argv;
     char merged_path[256];
     char cgroup_path[256];
@@ -101,6 +102,16 @@ void setup_cgroups(pid_t child_pid, container_config* config) {
         snprintf(file_path, sizeof(file_path), "%s/cpu.max", config->cgroup_path);
         write_file(file_path, value_str);
     }
+
+    if (strcmp(config->cpu_set, "none") != 0) {
+        // تنظیم هسته‌های مجاز
+        snprintf(file_path, sizeof(file_path), "%s/cpuset.cpus", config->cgroup_path);
+        write_file(file_path, config->cpu_set);
+        
+        // تنظیم گره‌های حافظه مجاز (یک مقدار پیش‌فرض امن)
+        snprintf(file_path, sizeof(file_path), "%s/cpuset.mems", config->cgroup_path);
+        write_file(file_path, "0");
+    }
 }
 
 // آماده‌سازی User Namespace
@@ -161,8 +172,8 @@ static int child_main(void *arg) {
 
 // --- تابع اصلی والد (اجراکننده) ---
 int main(int argc, char *argv[]) {
-    if (argc < 5) {
-        fprintf(stderr, "EXECUTOR USAGE: <hostname> <rootfs> <mem_limit> <cpu_quota> <read_bps> <write_bps> <container_dir> [ignored_cmd...]\n");
+    if (argc < 6) {
+        fprintf(stderr, "EXECUTOR USAGE: <hostname> <rootfs> <mem_limit> <cpu_quota> <cpu_set> [ignored_cmd...]\n");
         return 1;
     }
     
@@ -172,7 +183,8 @@ int main(int argc, char *argv[]) {
     config.rootfs_path = argv[2];
     config.memory_limit = argv[3];
     config.cpu_quota_str = argv[4];
-    config.cmd_argv = &argv[5];
+    config.cpu_set = argv[5];
+    config.cmd_argv = &argv[6];
 
     struct stat rootfs_stat;
     if (stat(config.rootfs_path, &rootfs_stat) == -1) {
@@ -184,7 +196,7 @@ int main(int argc, char *argv[]) {
     mkdir(CGROUP_BASE, 0755);
     char subtree_control_path[256];
     snprintf(subtree_control_path, sizeof(subtree_control_path), "%s/cgroup.subtree_control", CGROUP_BASE);
-    write_file(subtree_control_path, "+cpu +memory +io");
+    write_file(subtree_control_path, "+cpu +memory +cpuset");
 
     struct child_args args;
     args.config = &config;
