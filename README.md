@@ -85,13 +85,11 @@ This project is a practical demonstration of the following Linux kernel features
 You need a root filesystem (`rootfs`) for your container to run. You can create a minimal Debian system using `debootstrap`.
 
 ```sh
-# Install debootstrap (if not already installed)
-sudo apt-get update
-sudo apt-get install debootstrap
-
-# Create the rootfs directory
-mkdir -p /path/to/my-rootfs
-sudo debootstrap stable /path/to/my-rootfs [http://deb.debian.org/debian/](http://deb.debian.org/debian/)
+docker pull alpine
+docker create --name temp-alpine alpine
+mkdir my-alpine-rootfs
+docker export temp-alpine | tar -x -C my-alpine-rootfs
+docker rm temp-alpine
 ```
 
 ## Usage
